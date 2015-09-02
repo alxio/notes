@@ -32,6 +32,7 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
 
     private Mat mIntermediateMat;
     private Mat mTransposed;
+    private Mat mGray;
     private Random mRandom = new Random();
 
     static {
@@ -119,42 +120,22 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
     final int MAX = 32;
     final int MIN = 2;
     int[] count = new int[MAX];
-    double[] gray = {230};
 
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
-        Mat gray = inputFrame.gray();
-        Imgproc.adaptiveThreshold(gray, mIntermediateMat, 255, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY, 25, 5.0);
+        mGray = inputFrame.gray();
+
+        Imgproc.adaptiveThreshold(mGray, mIntermediateMat, 255, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY, 25, 5.0);
         Core.transpose(mIntermediateMat, mTransposed);
 
-        int white = 0;
-        int best = 0;
-        Arrays.fill(count, 0);
-        for (int i = 0; i < mTransposed.rows(); ++i) {
-            if (mRandom.nextInt(100) > 0) continue;
-            white = 0;
-            for (int j = 0; j < mTransposed.cols(); ++j) {
-                if (mTransposed.get(i, j)[0] > 0) {
-                    ++white;
-                } else {
-                    if (white > MIN && white < MAX) {
-                        ++count[white];
-                    }
-                    white = 0;
-                }
-            }
-        }
-        for (int i = MIN; i < MAX; ++i) {
-            if (count[i] > count[best]) best = i;
-        }
+        int rows = computeLineHeight(mTransposed.dataAddr(), mTransposed.cols(), mTransposed.rows());
+        Log.e(TAG, "NDK: " + rows);
 
-        Log.e(TAG, "NDK: " + computeLineHeight(mTransposed.dataAddr(),
-                mTransposed.cols(), mTransposed.rows()));
-        Log.e(TAG, "Best: " + best);
+        colorizeLine(mIntermediateMat.dataAddr(), mIntermediateMat.cols(), mIntermediateMat.rows(), rows);
 
-        colorizeLine(mTransposed.dataAddr(), mTransposed.cols(), mTransposed.rows(), best);
         Core.transpose(mTransposed, mIntermediateMat);
-        mIntermediateMat.copyTo(gray);
-        return gray;
+        mIntermediateMat.copyTo(mGray);
+
+        return mGray;
     }
 
     public native int computeLineHeight(long nativeObject, int w, int h);

@@ -12,9 +12,9 @@ const int TOLERANCE = 1;
 const int GRID = 10;
 
 int originalH, originalW, lineH;
-imageptr transposedImg;
 
-vector<vector<pair<int, int> > > data; //[x][(y)], y1, y2
+imageptr transposedImg;
+imageptr originalImg;
 
 struct line {
     int x0, y0, h0, x1, y1, h1;
@@ -37,11 +37,12 @@ struct line {
     }
 };
 
+vector<vector<pair<int, int> > > data; //[x][(y)], y1, y2
 vector<line> lines;
 
 void init() {
+    data.clear();
     data.resize(originalW / GRID);
-    for (int i = 0; i < data.size(); ++i) data[i].clear();
     int white = 0;
     imageptr ptr = transposedImg;
     for (int i = GRID; i < originalW; i += GRID) {
@@ -61,35 +62,51 @@ void init() {
 
 void findLines() {
     lines.clear();
-    int currY = 1000000000;
-    int index = 0;
     for (int i = 0; i < data.size(); ++i) {
-        int maxIndex = lines.size() - 1;
+        int currY = 1000000000;
+        int index = 0;
+        int initSize = lines.size();
         if (data[i].size() < 4) continue;
-        for (int j = 0; j < data[i].size(); ++i) {
-            while (currY < data[i][j].first && index < maxIndex) {
-                currY = lines[++index].h1;
+        for (int j = 0; j < data[i].size(); ++j) {
+            while (currY < data[i][j].first) {
+                if (++index < initSize)
+                    currY = lines[index].h1;
+                else break;
             }
-            if (lines[index].y1 > data[i][j].second) {
+            if (index >= initSize) {// || lines[index].y1 > data[i][j].second) {
                 lines.push_back(line(i, data[i][j]));
             } else {
                 lines[index].set(i, data[i][j]);
             }
         }
-        if (maxIndex + 1 != lines.size())
+        if (initSize != lines.size())
             sort(lines.begin(), lines.end());
+    }
+}
+
+void drawLines() {
+    for (int L = 0; L < lines.size(); ++L) {
+        line l = lines[L];
+        if (l.x0 >= l.x1) continue;
+        for (int x = l.x0; x <= l.x1; ++x) {
+            int y0 = l.y0 + (l.y1 - l.y0) * (x - l.x0) / (l.x1 - l.x0);
+            int y1 = l.h0 + (l.h1 - l.h0) * (x - l.x0) / (l.x1 - l.x0);
+            imageptr ptr = transposedImg + x * originalH + y0;
+            for (int y = y0; y < y1; ++y) {
+                *(ptr++) = 200;
+            }
+        }
     }
 }
 
 JNIEXPORT jint
 JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_colorizeLine
         (JNIEnv *, jobject, jlong matptr, jint w, jint h, jint lineh) {
-    transposedImg = (imageptr) matptr;
-    originalH = w;
-    originalW = h;
-    lineH = lineh;
-    init();
-    findLines();
+    originalImg = (imageptr) matptr;
+    //lineH = lineh;
+    //init();
+    //findLines();
+    //drawLines();
     return 0;
 }
 
@@ -104,6 +121,7 @@ JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_co
     int white = 0;
     int best = 0;
     imageptr ptr = (imageptr) matptr;
+
     for (int i = 0; i < MAX; ++i) counters[i] = 0;
     white = 0;
     for (int i = SKIP; i < h; i += SKIP) {
@@ -122,5 +140,14 @@ JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_co
     for (int i = MIN; i < MAX; ++i) {
         if (counters[i] > counters[best]) best = i;
     }
+
+    lineH = best;
+    transposedImg = (imageptr) matptr;
+    originalH = w;
+    originalW = h;
+    init();
+    findLines();
+    //drawLines();
+
     return best;
 }

@@ -1,1 +1,6 @@
 *.class
+*.o
+*.so
+*.o.d
+.gradle
+

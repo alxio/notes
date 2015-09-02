@@ -123,17 +123,7 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
 
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         Mat gray = inputFrame.gray();
-        Size sizeGray = gray.size();
-        Mat grayInner;
-        int rows = (int) sizeGray.height;
-        int cols = (int) sizeGray.width;
-        int left = cols / 16;
-        int top = rows / 16;
-        int width = cols * 7 / 8;
-        int height = rows * 7 / 8;
-        grayInner = gray.submat(top, top + height, left, left + width);
-
-        Imgproc.adaptiveThreshold(grayInner, mIntermediateMat, 255, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY, 25, 5.0);
+        Imgproc.adaptiveThreshold(gray, mIntermediateMat, 255, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY, 25, 5.0);
         Core.transpose(mIntermediateMat, mTransposed);
 
         int white = 0;
@@ -156,31 +146,14 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
         for (int i = MIN; i < MAX; ++i) {
             if (count[i] > count[best]) best = i;
         }
+
         Log.e(TAG, "NDK: " + computeLineHeight(mTransposed.dataAddr(),
                 mTransposed.cols(), mTransposed.rows()));
         Log.e(TAG, "Best: " + best);
 
         colorizeLine(mTransposed.dataAddr(), mTransposed.cols(), mTransposed.rows(), best);
-
-        /*
-        for (int i = 0; i < mTransposed.rows(); ++i) {
-            white = 0;
-            for (int j = 0; j < mTransposed.cols(); ++j) {
-                if (mTransposed.get(i, j)[0] > 0) {
-                    ++white;
-                } else {
-                    if (white == best) {
-                        for (int k = white; k > 0; --k) {
-                            mTransposed.put(i, j - k, 200.0);
-                        }
-                    }
-                    white = 0;
-                }
-            }
-        }
-        */
         Core.transpose(mTransposed, mIntermediateMat);
-        mIntermediateMat.copyTo(grayInner);
+        mIntermediateMat.copyTo(gray);
         return gray;
     }
 

@@ -124,7 +124,7 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         mGray = inputFrame.gray();
 
-        Imgproc.adaptiveThreshold(mGray, mIntermediateMat, 255, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY, 25, 5.0);
+        Imgproc.adaptiveThreshold(mGray, mIntermediateMat, 255, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY, 25, 10.0);
         Core.transpose(mIntermediateMat, mTransposed);
 
         int rows = computeLineHeight(mTransposed.dataAddr(), mTransposed.cols(), mTransposed.rows());
@@ -138,7 +138,7 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
         return mGray;
     }
 
-    public native int computeLineHeight(long nativeObject, int w, int h);
+    public synchronized native int computeLineHeight(long nativeObject, int w, int h);
 
-    public native int colorizeLine(long nativeObject, int w, int h, int lineHeight);
+    public synchronized native int colorizeLine(long nativeObject, int w, int h, int lineHeight);
 }

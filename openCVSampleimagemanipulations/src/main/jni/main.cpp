@@ -32,8 +32,8 @@ struct line {
     }
 
     bool operator<(line other) const {
-        return y0 != other.y0 ? y0 < other.y0
-                              : y1 < other.y1;
+        return !(y0 != other.y0 ? y0 < other.y0
+                                : y1 < other.y1);
     }
 };
 
@@ -41,28 +41,34 @@ vector<vector<pair<int, int> > > data; //[x][(y)], y1, y2
 vector<line> lines;
 
 void init() {
+    int size = originalW / GRID - 1;
     data.clear();
-    data.resize(originalW / GRID);
-    int white = 0;
-    imageptr ptr = transposedImg;
-    for (int i = GRID; i < originalW; i += GRID) {
-        ptr += GRID * originalH;
+    data.resize(size + 1);
+    imageptr ptr = transposedImg + GRID * originalH;
+    for (int i = 1; i < size; ++i) {
+        int white = 0;
         for (int j = 0; j < originalH; ++j) {
             if (*ptr++ > 0) {
                 ++white;
             } else {
-                if (abs(white - lineH) < TOLERANCE) {
-                    data[i / GRID - 1].push_back(make_pair(j - white, j));
+                if (abs(white - lineH) <= TOLERANCE) {
+                    for (imageptr p = ptr - white - 1; p < ptr; ++p) {
+                        *p = 222;
+                        *(p + originalH) = 222;
+                        *(p + 2 * originalH) = 222;
+                    }
+                    data[i].push_back(make_pair(j - white, j));
                 }
                 white = 0;
             }
         }
+        ptr += (GRID - 1) * originalH;
     }
 }
 
 void findLines() {
     lines.clear();
-    for (int i = 0; i < data.size(); ++i) {
+    for (int i = 1; i < data.size(); ++i) {
         int currY = 1000000000;
         int index = 0;
         int initSize = lines.size();
@@ -70,15 +76,29 @@ void findLines() {
         for (int j = 0; j < data[i].size(); ++j) {
             while (currY < data[i][j].first) {
                 if (++index < initSize)
-                    currY = lines[index].h1;
+                    currY = (lines[index].h1 + lines[index].y1) / 2;
                 else break;
             }
-            if (index >= initSize) {// || lines[index].y1 > data[i][j].second) {
-                lines.push_back(line(i, data[i][j]));
+            if (index >= initSize || currY > data[i][j].second) {
+//                imageptr p = transposedImg + GRID * originalH * i;
+//                for (int k = data[i][j].first; k < data[i][j].second; ++k) {
+//                    *(p + k) = 255 * ((k / 2) % 2);
+//                }
+                lines.push_back(line(i * GRID, data[i][j]));
             } else {
-                lines[index].set(i, data[i][j]);
+//                imageptr p = transposedImg + GRID * originalH * i - originalH + data[i][j].first;
+//                for (int k = 0; k + data[i][j].first < data[i][j].second; ++p, ++k) {
+//                    *p = 255 * ((k/3) % 2);
+//                }
+                lines[index].set(i * GRID, data[i][j]);
             }
         }
+//        for (int j = 0; j < lines.size(); ++j) {
+//            if (lines[j].x1 < i - 2) {
+//                swap(lines[j], lines[lines.size() - 1]);
+//                lines.pop_back();
+//            }
+//        }
         if (initSize != lines.size())
             sort(lines.begin(), lines.end());
     }
@@ -92,8 +112,8 @@ void drawLines() {
             int y0 = l.y0 + (l.y1 - l.y0) * (x - l.x0) / (l.x1 - l.x0);
             int y1 = l.h0 + (l.h1 - l.h0) * (x - l.x0) / (l.x1 - l.x0);
             imageptr ptr = transposedImg + x * originalH + y0;
-            for (int y = y0; y < y1; ++y) {
-                *(ptr++) = 200;
+            for (int y = y0; y <= y1; ++y) {
+                *(ptr++) = 180;
             }
         }
     }
@@ -121,11 +141,10 @@ JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_co
     int white = 0;
     int best = 0;
     imageptr ptr = (imageptr) matptr;
-
     for (int i = 0; i < MAX; ++i) counters[i] = 0;
     white = 0;
     for (int i = SKIP; i < h; i += SKIP) {
-        ptr += SKIP * w;
+        ptr += (SKIP - 1) * w;
         for (int j = 0; j < w; ++j) {
             if (*ptr++ > 0) {
                 ++white;
@@ -147,7 +166,6 @@ JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_co
     originalW = h;
     init();
     findLines();
-    //drawLines();
-
+    drawLines();
     return best;
 }

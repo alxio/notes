@@ -10,6 +10,7 @@ typedef unsigned char *imageptr;
 
 const int TOLERANCE = 1;
 const int GRID = 10;
+const int MAX_HOLE = 5;
 
 int originalH, originalW, lineH;
 
@@ -32,8 +33,7 @@ struct line {
     }
 
     bool operator<(line other) const {
-        return !(y0 != other.y0 ? y0 < other.y0
-                                : y1 < other.y1);
+        return y0 < other.y0;
     }
 };
 
@@ -51,7 +51,7 @@ void init() {
             if (*ptr++ > 0) {
                 ++white;
             } else {
-                if (abs(white - lineH) <= TOLERANCE) {
+                if (abs(white - lineH) <= TOLERANCE && white > 2 && white <= j) {
                     for (imageptr p = ptr - white - 1; p < ptr; ++p) {
                         *p = 222;
                         *(p + originalH) = 222;
@@ -69,38 +69,41 @@ void init() {
 void findLines() {
     lines.clear();
     for (int i = 1; i < data.size(); ++i) {
-        int currY = 1000000000;
-        int index = 0;
+        int currY = -1;
+        int index = -1;
         int initSize = lines.size();
         if (data[i].size() < 4) continue;
         for (int j = 0; j < data[i].size(); ++j) {
             while (currY < data[i][j].first) {
                 if (++index < initSize)
                     currY = (lines[index].h1 + lines[index].y1) / 2;
-                else break;
+                else {
+                    break;
+                }
             }
             if (index >= initSize || currY > data[i][j].second) {
-//                imageptr p = transposedImg + GRID * originalH * i;
-//                for (int k = data[i][j].first; k < data[i][j].second; ++k) {
-//                    *(p + k) = 255 * ((k / 2) % 2);
-//                }
+                imageptr p = transposedImg + GRID * originalH * i;
+                for (int k = data[i][j].first; k < data[i][j].second; ++k) {
+                    if (k % 2) *(p + k) = 0;
+                }
                 lines.push_back(line(i * GRID, data[i][j]));
             } else {
-//                imageptr p = transposedImg + GRID * originalH * i - originalH + data[i][j].first;
-//                for (int k = 0; k + data[i][j].first < data[i][j].second; ++p, ++k) {
-//                    *p = 255 * ((k/3) % 2);
-//                }
+                imageptr p = transposedImg + GRID * originalH * i;
+                for (int k = data[i][j].first; k < data[i][j].second; ++k) {
+                    if (k % 3 == 0) *(p + k) = 255;
+                }
                 lines[index].set(i * GRID, data[i][j]);
             }
         }
-//        for (int j = 0; j < lines.size(); ++j) {
-//            if (lines[j].x1 < i - 2) {
-//                swap(lines[j], lines[lines.size() - 1]);
-//                lines.pop_back();
-//            }
-//        }
-        if (initSize != lines.size())
-            sort(lines.begin(), lines.end());
+
+        for (int j = 0; j < lines.size(); ++j) {
+            if (lines[j].x1 < i - MAX_HOLE) {
+                swap(lines[j], lines[lines.size() - 1]);
+                lines.pop_back();
+            }
+        }
+
+        sort(lines.begin(), lines.end());
     }
 }
 
@@ -113,7 +116,7 @@ void drawLines() {
             int y1 = l.h0 + (l.h1 - l.h0) * (x - l.x0) / (l.x1 - l.x0);
             imageptr ptr = transposedImg + x * originalH + y0;
             for (int y = y0; y <= y1; ++y) {
-                *(ptr++) = 180;
+                *(ptr++) &= 192;
             }
         }
     }

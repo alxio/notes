@@ -9,8 +9,8 @@ using namespace std;
 typedef unsigned char *imageptr;
 
 const int TOLERANCE = 2;
-const int GRID = 5;
-const int MAX_HOLE = 40;
+const int GRID = 10;
+const int MAX_HOLE = 10;
 
 int originalH, originalW, lineH;
 
@@ -116,44 +116,78 @@ void findLines() {
 
 int correctLines() {
     for (int j = 0; j < lines.size(); ++j) {
-        if (lines[j].x1 - lines[j].x0 < originalW / 2) {
+        if (lines[j].x1 - lines[j].x0 < originalW / 4 || lines[j].x1 == lines[j].x0) {
             swap(lines[j], lines[lines.size() - 1]);
             lines.pop_back();
         }
     }
     sort(lines.begin(), lines.end());
-    if (lines.size() % 4 > 0) {
-        lines.clear();
-        swap(lines, oldLines);
-        return 1;
-    }
-    pentalines.clear();
+    //return 0;
     int x0, x1;
     int count = 0;
-    for (int a = 0; a < lines.size() / 4; ++a) {
-        x0 = 1000000000;
-        x1 = 0;
-        for (int i = 0; i < 4; ++i) {
-            line &l = lines[4 * a + i];
-            if (l.x0 < x0) x0 = l.x0;
-            if (l.x1 > x1) x1 = l.x1;
-        }
-        for (int i = 0; i < 4; ++i) {
-            line &l = lines[4 * a + i];
-            if (l.x1 == l.x0) continue;
-            if (l.x0 > x0) {
-                l.y0 += (l.y0 - l.y1) * (l.x0 - x0) / (l.x1 - l.x0);
-                l.h0 += (l.h0 - l.h1) * (l.x0 - x0) / (l.x1 - l.x0);
-                l.x0 = x0;
+    int skipped = -1;
+    int y = 0;
+    vector<int> badLines;
+    pentalines.clear();
+    for (int i = 0; i < lines.size(); ++i) {
+        line li = lines[i];
+        if (li.x1 == li.x0) continue;
+        int h = li.h0 + (li.h1 - li.h0) * (originalW / 2 - li.x0) / (li.x1 - li.x0);
+        //int h = (li.h0 + li.h1) / 2;
+        if (count == 0) {
+            y = h;
+            count = 1;
+            skipped = -1;
+        } else {
+            if (h - y < lineH * 2) {
+                ++count;
+                y = h;
+            } else if (count < 3 && skipped == -1 && h - y < lineH * 3) {
+                skipped = ++count;
+                ++count;
+                y = h;
+            } else {
+//                badLines.push_back(i);
+//                badLines.push_back(i - 1);
+//                if (count > 2 && skipped == -1) {
+//                    badLines.push_back(i - 3);
+//                }
+//                if (count > 2 || skipped == -1 && count > 1) {
+//                    badLines.push_back(i - 2);
+//                }
+                count = 0;
             }
-            if (l.x1 < x1) {
-                l.y1 += (l.y1 - l.y0) * (x1 - l.x1) / (l.x1 - l.x0);
-                l.h1 += (l.h1 - l.h0) * (x1 - l.x1) / (l.x1 - l.x0);
-                l.x1 = x1;
-            }
         }
-        line penta = line(lines[4 * a], lines[4 * a + 3]);
-        pentalines.push_back(penta);
+        if (count == 4) {
+            int first = skipped > 0 ? i - 2 : i - 3;
+            x0 = 1000000000;
+            x1 = 0;
+            for (int j = first; j <= i; ++j) {
+                line &l = lines[j];
+                if (l.x0 < x0) x0 = l.x0;
+                if (l.x1 > x1) x1 = l.x1;
+            }
+            for (int j = first; j <= i; ++j) {
+                line &l = lines[j];
+                if (l.x1 == l.x0) continue;
+                if (l.x0 > x0) {
+                    l.y0 += (l.y0 - l.y1) * (l.x0 - x0) / (l.x1 - l.x0);
+                    l.h0 += (l.h0 - l.h1) * (l.x0 - x0) / (l.x1 - l.x0);
+                    l.x0 = x0;
+                }
+                if (l.x1 < x1) {
+                    l.y1 += (l.y1 - l.y0) * (x1 - l.x1) / (l.x1 - l.x0);
+                    l.h1 += (l.h1 - l.h0) * (x1 - l.x1) / (l.x1 - l.x0);
+                    l.x1 = x1;
+                }
+            }
+            line penta = line(lines[first], lines[i]);
+            pentalines.push_back(penta);
+            count = 0;
+        }
+    }
+    for (int i = badLines.size() - 1; i >= 0; --i) {
+        lines.erase(lines.begin() + badLines[i]);
     }
     return 0;
 }

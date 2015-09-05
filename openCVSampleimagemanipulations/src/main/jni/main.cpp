@@ -30,11 +30,11 @@ struct line {
         x0 = up.x0;
         x1 = up.x1;
         int m0 = (up.y0 + down.h0) / 2;
-        y0 = 2 * up.y0 - m0;
-        h0 = 2 * down.h0 - m0;
+        y0 = up.y0 + 1.25 * (up.y0 - m0);
+        h0 = down.h0 + 1.25 * (down.h0 - m0);
         int m1 = (up.y1 + down.h1) / 2;
-        y1 = 2 * up.y1 - m1;
-        h1 = 2 * down.h1 - m1;
+        y1 = up.y1 + 1.25 * (up.y1 - m1);
+        h1 = down.h1 + 1.25 * (down.h1 - m1);
     }
 
     void set(int x, pair<int, int> y) {
@@ -52,6 +52,43 @@ vector<vector<pair<int, int> > > data; //[x][(y)], y1, y2
 vector<line> lines;
 vector<line> pentalines;
 vector<line> oldLines;
+vector<vector<pair<int, int> > > blobs;
+
+float START_TRESH = 0.9;
+float STOP_TRESH = 0.8;
+
+void findBlobs() {
+    blobs.clear();
+    blobs.resize(pentalines.size());
+    for (int L = 0; L < pentalines.size(); ++L) {
+        line l = pentalines[L];
+        if (l.x0 >= l.x1) continue;
+        int state = 0;
+        for (int x = l.x0; x <= l.x1; ++x) {
+            int y0 = l.y0 + (l.y1 - l.y0) * (x - l.x0) / (l.x1 - l.x0);
+            int y1 = l.h0 + (l.h1 - l.h0) * (x - l.x0) / (l.x1 - l.x0);
+            imageptr ptr = transposedImg + x * originalH + y0;
+            int max = 0;
+            int count = 0;
+            for (int y = y0; y <= y1; ++y) {
+                if (*ptr++ == 0) {
+                    ++count;
+                } else {
+                    if (count > max) max = count;
+                    count = 0;
+                }
+            }
+            if (max > START_TRESH * lineH) state = 1;
+            if (max < STOP_TRESH * lineH) state = 0;
+            if (state) {
+                ptr = transposedImg + x * originalH + y0;
+                for (int y = y0; y <= y1; ++y) {
+                    *ptr++ &= 127;
+                }
+            }
+        }
+    }
+}
 
 void init() {
     int size = originalW / GRID - 1;
@@ -134,29 +171,17 @@ int correctLines() {
         if (li.x1 == li.x0) continue;
         int h = li.h0 + (li.h1 - li.h0) * (originalW / 2 - li.x0) / (li.x1 - li.x0);
         //int h = (li.h0 + li.h1) / 2;
-        if (count == 0) {
+        if (count > 0 && h - y < lineH * 2) {
+            ++count;
+            y = h;
+        } else if (count > 0 && count < 3 && skipped == -1 && h - y < lineH * 3) {
+            skipped = ++count;
+            ++count;
+            y = h;
+        } else {
             y = h;
             count = 1;
             skipped = -1;
-        } else {
-            if (h - y < lineH * 2) {
-                ++count;
-                y = h;
-            } else if (count < 3 && skipped == -1 && h - y < lineH * 3) {
-                skipped = ++count;
-                ++count;
-                y = h;
-            } else {
-//                badLines.push_back(i);
-//                badLines.push_back(i - 1);
-//                if (count > 2 && skipped == -1) {
-//                    badLines.push_back(i - 3);
-//                }
-//                if (count > 2 || skipped == -1 && count > 1) {
-//                    badLines.push_back(i - 2);
-//                }
-                count = 0;
-            }
         }
         if (count == 4) {
             int first = skipped > 0 ? i - 2 : i - 3;
@@ -274,6 +299,7 @@ JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_co
     init();
     findLines();
     correctLines();
+    findBlobs();
     drawLines();
     postProcess();
     return best;

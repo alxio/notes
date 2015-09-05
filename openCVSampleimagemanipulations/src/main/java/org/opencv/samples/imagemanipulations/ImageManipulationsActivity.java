@@ -133,6 +133,7 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
         colorizeLine(mIntermediateMat.dataAddr(), mIntermediateMat.cols(), mIntermediateMat.rows(), rows);
 
         Core.transpose(mTransposed, mIntermediateMat);
+
         mIntermediateMat.copyTo(mGray);
 
         return mGray;

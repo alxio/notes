@@ -4,10 +4,10 @@ include $(CLEAR_VARS)
 LOCAL_MODULE := myNativeLib
 LOCAL_LDFLAGS := -Wl,--build-id
 LOCAL_SRC_FILES := \
-	/home/a.kedziersk2/image-manipulations/openCVSampleimagemanipulations/src/main/jni/main.cpp \
-	/home/a.kedziersk2/image-manipulations/openCVSampleimagemanipulations/src/main/jni/empty.cpp \
+	C:\NUTY\image-manipulations\openCVSampleimagemanipulations\src\main\jni\empty.cpp \
+	C:\NUTY\image-manipulations\openCVSampleimagemanipulations\src\main\jni\main.cpp \
 
-LOCAL_C_INCLUDES += /home/a.kedziersk2/image-manipulations/openCVSampleimagemanipulations/src/main/jni
-LOCAL_C_INCLUDES += /home/a.kedziersk2/image-manipulations/openCVSampleimagemanipulations/src/debug/jni
+LOCAL_C_INCLUDES += C:\NUTY\image-manipulations\openCVSampleimagemanipulations\src\main\jni
+LOCAL_C_INCLUDES += C:\NUTY\image-manipulations\openCVSampleimagemanipulations\src\debug\jni
 
 include $(BUILD_SHARED_LIBRARY)

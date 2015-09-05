@@ -8,9 +8,9 @@
 using namespace std;
 typedef unsigned char *imageptr;
 
-const int TOLERANCE = 1;
-const int GRID = 10;
-const int MAX_HOLE = 5;
+const int TOLERANCE = 2;
+const int GRID = 5;
+const int MAX_HOLE = 40;
 
 int originalH, originalW, lineH;
 
@@ -26,6 +26,17 @@ struct line {
         h0 = h1 = y.second;
     }
 
+    line(line up, line down) {
+        x0 = up.x0;
+        x1 = up.x1;
+        int m0 = (up.y0 + down.h0) / 2;
+        y0 = 2 * up.y0 - m0;
+        h0 = 2 * down.h0 - m0;
+        int m1 = (up.y1 + down.h1) / 2;
+        y1 = 2 * up.y1 - m1;
+        h1 = 2 * down.h1 - m1;
+    }
+
     void set(int x, pair<int, int> y) {
         x1 = x;
         y1 = y.first;
@@ -39,6 +50,8 @@ struct line {
 
 vector<vector<pair<int, int> > > data; //[x][(y)], y1, y2
 vector<line> lines;
+vector<line> pentalines;
+vector<line> oldLines;
 
 void init() {
     int size = originalW / GRID - 1;
@@ -52,11 +65,6 @@ void init() {
                 ++white;
             } else {
                 if (abs(white - lineH) <= TOLERANCE && white > 2 && white <= j) {
-                    for (imageptr p = ptr - white - 1; p < ptr; ++p) {
-                        *p = 222;
-                        *(p + originalH) = 222;
-                        *(p + 2 * originalH) = 222;
-                    }
                     data[i].push_back(make_pair(j - white, j));
                 }
                 white = 0;
@@ -67,6 +75,7 @@ void init() {
 }
 
 void findLines() {
+    swap(lines, oldLines);
     lines.clear();
     for (int i = 1; i < data.size(); ++i) {
         int currY = -1;
@@ -95,19 +104,74 @@ void findLines() {
                 lines[index].set(i * GRID, data[i][j]);
             }
         }
-
         for (int j = 0; j < lines.size(); ++j) {
-            if (lines[j].x1 < i - MAX_HOLE) {
+            if (lines[j].x1 < (i - MAX_HOLE) * GRID) {
                 swap(lines[j], lines[lines.size() - 1]);
                 lines.pop_back();
             }
         }
-
         sort(lines.begin(), lines.end());
     }
 }
 
+int correctLines() {
+    for (int j = 0; j < lines.size(); ++j) {
+        if (lines[j].x1 - lines[j].x0 < originalW / 2) {
+            swap(lines[j], lines[lines.size() - 1]);
+            lines.pop_back();
+        }
+    }
+    sort(lines.begin(), lines.end());
+    if (lines.size() % 4 > 0) {
+        lines.clear();
+        swap(lines, oldLines);
+        return 1;
+    }
+    pentalines.clear();
+    int x0, x1;
+    int count = 0;
+    for (int a = 0; a < lines.size() / 4; ++a) {
+        x0 = 1000000000;
+        x1 = 0;
+        for (int i = 0; i < 4; ++i) {
+            line &l = lines[4 * a + i];
+            if (l.x0 < x0) x0 = l.x0;
+            if (l.x1 > x1) x1 = l.x1;
+        }
+        for (int i = 0; i < 4; ++i) {
+            line &l = lines[4 * a + i];
+            if (l.x1 == l.x0) continue;
+            if (l.x0 > x0) {
+                l.y0 += (l.y0 - l.y1) * (l.x0 - x0) / (l.x1 - l.x0);
+                l.h0 += (l.h0 - l.h1) * (l.x0 - x0) / (l.x1 - l.x0);
+                l.x0 = x0;
+            }
+            if (l.x1 < x1) {
+                l.y1 += (l.y1 - l.y0) * (x1 - l.x1) / (l.x1 - l.x0);
+                l.h1 += (l.h1 - l.h0) * (x1 - l.x1) / (l.x1 - l.x0);
+                l.x1 = x1;
+            }
+        }
+        line penta = line(lines[4 * a], lines[4 * a + 3]);
+        pentalines.push_back(penta);
+    }
+    return 0;
+}
+
 void drawLines() {
+    for (int L = 0; L < pentalines.size(); ++L) {
+        line l = pentalines[L];
+        if (l.x0 >= l.x1) continue;
+        for (int x = l.x0; x <= l.x1; ++x) {
+            int y0 = l.y0 + (l.y1 - l.y0) * (x - l.x0) / (l.x1 - l.x0);
+            int y1 = l.h0 + (l.h1 - l.h0) * (x - l.x0) / (l.x1 - l.x0);
+            imageptr ptr = transposedImg + x * originalH + y0;
+            for (int y = y0; y <= y1; ++y) {
+                *(ptr) |= 32;
+                *(ptr++) &= 224;
+            }
+        }
+    }
     for (int L = 0; L < lines.size(); ++L) {
         line l = lines[L];
         if (l.x0 >= l.x1) continue;
@@ -116,9 +180,15 @@ void drawLines() {
             int y1 = l.h0 + (l.h1 - l.h0) * (x - l.x0) / (l.x1 - l.x0);
             imageptr ptr = transposedImg + x * originalH + y0;
             for (int y = y0; y <= y1; ++y) {
-                *(ptr++) &= 192;
+                *(ptr++) &= 160;
             }
         }
+    }
+}
+
+void postProcess() {
+    for (imageptr ptr = transposedImg; ptr < transposedImg + originalH * originalW; ++ptr) {
+        if (*ptr == 0) *ptr = 200;
     }
 }
 
@@ -169,6 +239,8 @@ JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_co
     originalW = h;
     init();
     findLines();
+    correctLines();
     drawLines();
+    postProcess();
     return best;
 }

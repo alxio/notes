@@ -48,11 +48,58 @@ struct line {
     }
 };
 
+struct penta {
+    int x0, x1, m0, m1, th0, th1;
+
+    penta(line up, line down) {
+        x0 = up.x0;
+        x1 = up.x1;
+        m0 = (up.y0 + down.h0) / 2;
+        th0 = -up.y0 + down.y0;
+        m1 = (up.y1 + down.h1) / 2;
+        th1 = -up.y1 + down.y1;
+    }
+};
+
 vector<vector<pair<int, int> > > data; //[x][(y)], y1, y2
 vector<line> lines;
-vector<line> pentalines;
+vector<penta> pentalines;
 vector<line> oldLines;
 vector<vector<pair<int, int> > > blobs;
+
+
+void removeBlackLines() {
+    for (int L = 0; L < pentalines.size(); ++L) {
+        penta l = pentalines[L];
+        if (l.x0 >= l.x1) continue;
+        for (int base = -2; base <= 2; ++base) {
+            float y0 = l.m0 + base * l.th0 / 3.0f;
+            float y1 = l.m1 + base * l.th1 / 3.0f;
+            for (int x = l.x0; x <= l.x1; ++x) {
+                float f1 = ((float) x - l.x0) / (l.x1 - l.x0);
+                float f0 = 1.0f - f1;
+                int yy = (int) (y0 * f0 + y1 * f1);
+                imageptr baseptr = transposedImg + x * originalH + yy;
+                int count = 0;
+                for (int y = -3; y <= 3; ++y) {
+                    if (*(baseptr + y) == 0) count += (1 + abs(y / 2));
+                }
+                if (count < 6) {
+                    for (int y = -3; y <= 3; ++y) {
+                        *(baseptr + y) = 255;
+                    }
+                }
+//                if (*(baseptr - 3) == 0 && *(baseptr - 4) == 0) continue;
+//                if (*(baseptr + 3) == 0 && *(baseptr + 4) == 0) continue;
+//                for (int y = -2; y <= 2; ++y) {
+//                    *(baseptr + y) = 255;
+////                    if (*(baseptr + y) == 0) *(baseptr + y) = 159;
+////                    else *(baseptr + y) = 95;
+//                }
+            }
+        }
+    }
+}
 
 float START_TRESH = 0.9;
 float STOP_TRESH = 0.8;
@@ -61,12 +108,14 @@ void findBlobs() {
     blobs.clear();
     blobs.resize(pentalines.size());
     for (int L = 0; L < pentalines.size(); ++L) {
-        line l = pentalines[L];
+        penta l = pentalines[L];
         if (l.x0 >= l.x1) continue;
         int state = 0;
         for (int x = l.x0; x <= l.x1; ++x) {
-            int y0 = l.y0 + (l.y1 - l.y0) * (x - l.x0) / (l.x1 - l.x0);
-            int y1 = l.h0 + (l.h1 - l.h0) * (x - l.x0) / (l.x1 - l.x0);
+            float f1 = ((float) x - l.x0) / (l.x1 - l.x0);
+            float f0 = 1.0f - f1;
+            int y0 = (l.m0 - 4 * l.th0 / 3) * f0 + (l.m1 - 4 * l.th1 / 3) * f1;
+            int y1 = (l.m0 + 4 * l.th0 / 3) * f0 + (l.m1 + 4 * l.th1 / 3) * f1;
             imageptr ptr = transposedImg + x * originalH + y0;
             int max = 0;
             int count = 0;
@@ -206,8 +255,8 @@ int correctLines() {
                     l.x1 = x1;
                 }
             }
-            line penta = line(lines[first], lines[i]);
-            pentalines.push_back(penta);
+            penta pen = penta(lines[first], lines[i]);
+            pentalines.push_back(pen);
             count = 0;
         }
     }
@@ -219,11 +268,13 @@ int correctLines() {
 
 void drawLines() {
     for (int L = 0; L < pentalines.size(); ++L) {
-        line l = pentalines[L];
+        penta l = pentalines[L];
         if (l.x0 >= l.x1) continue;
         for (int x = l.x0; x <= l.x1; ++x) {
-            int y0 = l.y0 + (l.y1 - l.y0) * (x - l.x0) / (l.x1 - l.x0);
-            int y1 = l.h0 + (l.h1 - l.h0) * (x - l.x0) / (l.x1 - l.x0);
+            float f1 = ((float) x - l.x0) / (l.x1 - l.x0);
+            float f0 = 1.0f - f1;
+            int y0 = (l.m0 - 4 * l.th0 / 3) * f0 + (l.m1 - 4 * l.th1 / 3) * f1;
+            int y1 = (l.m0 + 4 * l.th0 / 3) * f0 + (l.m1 + 4 * l.th1 / 3) * f1;
             imageptr ptr = transposedImg + x * originalH + y0;
             for (int y = y0; y <= y1; ++y) {
                 *(ptr) |= 32;
@@ -231,6 +282,7 @@ void drawLines() {
             }
         }
     }
+    return;
     for (int L = 0; L < lines.size(); ++L) {
         line l = lines[L];
         if (l.x0 >= l.x1) continue;
@@ -239,7 +291,7 @@ void drawLines() {
             int y1 = l.h0 + (l.h1 - l.h0) * (x - l.x0) / (l.x1 - l.x0);
             imageptr ptr = transposedImg + x * originalH + y0;
             for (int y = y0; y <= y1; ++y) {
-                *(ptr++) &= 160;
+                *(ptr++) &= 192;
             }
         }
     }
@@ -299,6 +351,7 @@ JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_co
     init();
     findLines();
     correctLines();
+    removeBlackLines();
     findBlobs();
     drawLines();
     postProcess();

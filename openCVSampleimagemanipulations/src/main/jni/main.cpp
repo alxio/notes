@@ -9,13 +9,17 @@ using namespace std;
 typedef unsigned char *imageptr;
 
 const int TOLERANCE = 2;
-const int GRID = 10;
-const int MAX_HOLE = 10;
+const int GRID = 20;
+const int MAX_HOLE = 5;
 
 int originalH, originalW, lineH;
 
 imageptr transposedImg;
 imageptr originalImg;
+
+inline unsigned char &IMG(int x, int y) {
+    return *(transposedImg + originalH * x + y);
+}
 
 struct line {
     int x0, y0, h0, x1, y1, h1;
@@ -61,11 +65,22 @@ struct penta {
     }
 };
 
+struct blob {
+    blob(int x0, int x1, int y0, int y1) {
+        this->x0 = x0;
+        this->x1 = x1;
+        this->y0 = y0;
+        this->y1 = y1;
+    }
+
+    int x0, x1, y0, y1;
+};
+
 vector<vector<pair<int, int> > > data; //[x][(y)], y1, y2
 vector<line> lines;
 vector<penta> pentalines;
 vector<line> oldLines;
-vector<vector<pair<int, int> > > blobs;
+vector<vector<blob> > blobs;
 
 
 void removeBlackLines() {
@@ -102,20 +117,21 @@ void removeBlackLines() {
 }
 
 float START_TRESH = 0.9;
-float STOP_TRESH = 0.8;
+float STOP_TRESH = 0.75;
 
-void findBlobs() {
+void findBlobs2() {
     blobs.clear();
     blobs.resize(pentalines.size());
     for (int L = 0; L < pentalines.size(); ++L) {
         penta l = pentalines[L];
         if (l.x0 >= l.x1) continue;
         int state = 0;
+        int first = 0;
         for (int x = l.x0; x <= l.x1; ++x) {
             float f1 = ((float) x - l.x0) / (l.x1 - l.x0);
             float f0 = 1.0f - f1;
-            int y0 = (l.m0 - 4 * l.th0 / 3) * f0 + (l.m1 - 4 * l.th1 / 3) * f1;
-            int y1 = (l.m0 + 4 * l.th0 / 3) * f0 + (l.m1 + 4 * l.th1 / 3) * f1;
+            int y0 = (l.m0 - 3 * l.th0 / 2) * f0 + (l.m1 - 3 * l.th1 / 2) * f1;
+            int y1 = (l.m0 + 3 * l.th0 / 2) * f0 + (l.m1 + 3 * l.th1 / 2) * f1;
             imageptr ptr = transposedImg + x * originalH + y0;
             int max = 0;
             int count = 0;
@@ -127,12 +143,70 @@ void findBlobs() {
                     count = 0;
                 }
             }
-            if (max > START_TRESH * lineH) state = 1;
-            if (max < STOP_TRESH * lineH) state = 0;
-            if (state) {
-                ptr = transposedImg + x * originalH + y0;
+            if (max > START_TRESH * lineH) {
+                if (state == 0) {
+                    first = x;
+                    state = 1;
+                }
+            }
+            if (max < STOP_TRESH * lineH || x - first > 2 * lineH) {
+                if (state == 1) {
+                    blobs[L].push_back(blob(first, x, y0, y1));
+                    state = 0;
+                }
+            }
+//            if (state) {
+//                ptr = transposedImg + x * originalH + y0;
+//                for (int y = y0; y <= y1; ++y) {
+//                    *ptr++ &= 127;
+//                }
+//            }
+        }
+    }
+}
+
+void correctBlobs2() {
+    for (int L = 0; L < blobs.size(); ++L) {
+        penta l = pentalines[L];
+        for (int b = 0; b < blobs[L].size(); ++b) {
+            blob &bl = blobs[L][b];
+            int best = 0;
+            int besty = 0;
+            int c = 0;
+            for (int y = bl.y0; y <= bl.y1; ++y) {
+                int count = 0;
+                for (int x = bl.x0; x <= bl.x1; ++x) {
+                    if (IMG(x, y) == 0) {
+                        ++count;
+                    }
+                }
+                if (count > lineH) {
+                    ++c;
+                } else {
+                    if (c > best) {
+                        best = c;
+                        besty = y - c;
+                    }
+                    c = 0;
+                }
+            }
+            bl.y0 = besty;
+            bl.y1 = besty + best;
+        }
+    }
+}
+
+void drawBlobs() {
+    for (int L = 0; L < blobs.size(); ++L) {
+        penta l = pentalines[L];
+        for (int b = 0; b < blobs[L].size(); ++b) {
+            blob bl = blobs[L][b];
+            int y0 = bl.y0;
+            int y1 = bl.y1;
+            for (int x = bl.x0; x <= bl.x1; ++x) {
+                imageptr ptr = transposedImg + x * originalH + y0;
                 for (int y = y0; y <= y1; ++y) {
-                    *ptr++ &= 127;
+                    *ptr++ ^= 255;
                 }
             }
         }
@@ -157,6 +231,61 @@ void init() {
             }
         }
         ptr += (GRID - 1) * originalH;
+    }
+}
+
+const float MIN_H = 0.8f;
+
+void findBlobs(){
+    blobs.clear();
+    blobs.resize(pentalines.size());
+    for (int L = 0; L < pentalines.size(); ++L) {
+        penta l = pentalines[L];
+        vector<blob>& lines = blobs[L];
+        if (l.x0 >= l.x1) continue;
+        for (int x = l.x0; x <= l.x1; ++x) {
+            float f1 = ((float) x - l.x0) / (l.x1 - l.x0);
+            float f0 = 1.0f - f1;
+            int y0 = (l.m0 - 3 * l.th0 / 2) * f0 + (l.m1 - 3 * l.th1 / 2) * f1;
+            int y1 = (l.m0 + 3 * l.th0 / 2) * f0 + (l.m1 + 3 * l.th1 / 2) * f1;
+            
+            int currY = -1;
+            int index = -1;
+            int initSize = lines.size();
+            int count = 0;
+            imageptr ptr = transposedImg + x * originalH + y0;
+            
+            for (int y = y0; y <= y1; ++y) {
+                if (*ptr++ == 0) {
+                    ++count;
+                } else {
+                    if(count > MIN_H * lineH){
+                        while (currY < y - count) {
+                            if (++index < initSize)
+                                currY = (lines[index].y0 + lines[index].y1) / 2;
+                            else {
+                                break;
+                            }
+                        }
+                        if (index >= initSize || currY >= y) {
+                            lines.push_back(blob(x,x,y - count,y-1));
+                        } else {
+                            lines[index].x1 = x;
+                            lines[index].y0 = y - count;
+                            lines[index].y1 = y - 1;
+                        }
+                    }
+                    count = 0;
+                }
+            }
+            for (int j = 0; j < lines.size(); ++j) {
+                if (lines[j].x1 < (i - MAX_HOLE) * GRID) {
+                    swap(lines[j], lines[lines.size() - 1]);
+                    lines.pop_back();
+                }
+            }
+            sort(lines.begin(), lines.end());
+        }
     }
 }
 
@@ -273,8 +402,8 @@ void drawLines() {
         for (int x = l.x0; x <= l.x1; ++x) {
             float f1 = ((float) x - l.x0) / (l.x1 - l.x0);
             float f0 = 1.0f - f1;
-            int y0 = (l.m0 - 4 * l.th0 / 3) * f0 + (l.m1 - 4 * l.th1 / 3) * f1;
-            int y1 = (l.m0 + 4 * l.th0 / 3) * f0 + (l.m1 + 4 * l.th1 / 3) * f1;
+            int y0 = (l.m0 - 3 * l.th0 / 3) * f0 + (l.m1 - 3 * l.th1 / 3) * f1;
+            int y1 = (l.m0 + 3 * l.th0 / 3) * f0 + (l.m1 + 3 * l.th1 / 3) * f1;
             imageptr ptr = transposedImg + x * originalH + y0;
             for (int y = y0; y <= y1; ++y) {
                 *(ptr) |= 32;
@@ -304,13 +433,10 @@ void postProcess() {
 }
 
 JNIEXPORT jint
+
 JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_colorizeLine
         (JNIEnv *, jobject, jlong matptr, jint w, jint h, jint lineh) {
     originalImg = (imageptr) matptr;
-    //lineH = lineh;
-    //init();
-    //findLines();
-    //drawLines();
     return 0;
 }
 
@@ -320,6 +446,7 @@ const int SKIP = 100;
 int counters[MAX];
 
 JNIEXPORT jint
+
 JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_computeLineHeight
         (JNIEnv *, jobject, jlong matptr, jint w, jint h) {
     int white = 0;
@@ -351,8 +478,10 @@ JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_co
     init();
     findLines();
     correctLines();
-    removeBlackLines();
     findBlobs();
+    //removeBlackLines();
+    //correctBlobs();
+    drawBlobs();
     drawLines();
     postProcess();
     return best;

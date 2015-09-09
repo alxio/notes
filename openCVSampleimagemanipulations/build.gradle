@@ -10,7 +10,7 @@ android {
         targetSdkVersion 8
         ndk{
             moduleName "myNativeLib"
-            stl "stlport_static"
+            stl "gnustl_static"
         }
     }
 

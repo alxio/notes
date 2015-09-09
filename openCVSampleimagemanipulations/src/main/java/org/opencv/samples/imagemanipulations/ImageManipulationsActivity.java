@@ -124,21 +124,14 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
 
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         mGray = inputFrame.gray();
-        if (false) {
-            Imgproc.dilate(mGray, mIntermediateMat, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2, 2)));
-            Imgproc.adaptiveThreshold(mIntermediateMat, mGray, 255, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY, 25, 10.0);
-            //Imgproc.morphologyEx(mGray, mIntermediateMat, Imgproc.MORPH_CROSS, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(3, 3)));
-            Imgproc.dilate(mGray, mIntermediateMat, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2, 2)));
-            return mIntermediateMat;
-        }
-        Imgproc.adaptiveThreshold(mGray, mIntermediateMat, 255, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY, 25, 10.0);
+        Imgproc.adaptiveThreshold(mGray, mIntermediateMat, 255, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY, 25, 5.0);
         Imgproc.dilate(mIntermediateMat, mGray, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(1.5, 1.5)));
         Core.transpose(mGray, mTransposed);
 
+        colorizeLine(mGray.dataAddr(), mGray.cols(), mGray.rows(), 0);
         int rows = computeLineHeight(mTransposed.dataAddr(), mTransposed.cols(), mTransposed.rows());
         Log.e(TAG, "NDK: " + rows);
 
-        colorizeLine(mIntermediateMat.dataAddr(), mIntermediateMat.cols(), mIntermediateMat.rows(), rows);
 
         Core.transpose(mTransposed, mGray);
 

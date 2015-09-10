@@ -122,7 +122,7 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
     final int MIN = 2;
     int[] count = new int[MAX];
 
-    public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
+    public synchronized Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         mGray = inputFrame.gray();
         Imgproc.adaptiveThreshold(mGray, mIntermediateMat, 255, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY, 25, 5.0);
         Imgproc.dilate(mIntermediateMat, mGray, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(1.5, 1.5)));
@@ -131,14 +131,26 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
         colorizeLine(mGray.dataAddr(), mGray.cols(), mGray.rows(), 0);
         int rows = computeLineHeight(mTransposed.dataAddr(), mTransposed.cols(), mTransposed.rows());
         Log.e(TAG, "NDK: " + rows);
-
-
+        readData();
         Core.transpose(mTransposed, mGray);
 
         return mGray;
     }
 
-    public synchronized native int computeLineHeight(long nativeObject, int w, int h);
+    private void readData() {
+        ArrayList<Integer> arr = new ArrayList<>();
+        byte[] len = new byte[1];
+        byte[] tmp = new byte[2];
+        mTransposed.get(0, 0, len);
+        for (int i = 1; i / 2 < len[0]; i += 2) {
+            mTransposed.get(0, i, tmp);
+            arr.add((int) tmp[0]);
+            arr.add((int) tmp[1]);
+        }
+        Log.e(TAG, "NOTES: " + arr.toString() + " " + arr.toString());
+    }
 
-    public synchronized native int colorizeLine(long nativeObject, int w, int h, int lineHeight);
+    public native int computeLineHeight(long nativeObject, int w, int h);
+
+    public native int colorizeLine(long nativeObject, int w, int h, int lineHeight);
 }

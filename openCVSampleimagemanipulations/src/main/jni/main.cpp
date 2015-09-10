@@ -8,10 +8,12 @@
 using namespace std;
 typedef unsigned char *imageptr;
 
-const int TOLERANCE = 2;
-const int GRID = 20;
-const int MAX_HOLE = 5;
+#define UPDATE(a, b, op) if(b op a) a=b
 
+const int TOLERANCE = 2;
+const int GRID = 10;
+const int MAX_HOLE = 10;
+const int INFINITY = 1000000000;
 int originalH, originalW, lineH;
 
 imageptr transposedImg;
@@ -65,6 +67,11 @@ struct penta {
     }
 };
 
+const int NOTE_COLOR = 50;
+const int HORIZONTAL_COLOR = 150;
+const int VERTICAL_COLOR = 100;
+const int OTHER_COLOR = 20;
+
 struct blob {
     blob(int x0, int x1, int y0, int y1) {
         this->x0 = x0;
@@ -73,7 +80,11 @@ struct blob {
         this->y1 = y1;
     }
 
-    int x0, x1, y0, y1;
+    bool operator<(blob other) const {
+        return y0 < other.y0;
+    }
+
+    int x0, x1, y0, y1, h;//ymax, ymin;
 };
 
 vector<vector<pair<int, int> > > data; //[x][(y)], y1, y2
@@ -82,6 +93,81 @@ vector<penta> pentalines;
 vector<line> oldLines;
 vector<vector<blob> > blobs;
 
+vector<vector<blob> > notes;
+vector<vector<blob> > hbars;
+vector<vector<blob> > vbars;
+vector<vector<blob> > others;
+
+struct sound {
+    int len;
+    int hei;
+};
+
+vector<sound> music;
+
+void createMusic() {
+    for (int L = 0; L < pentalines.size(); ++L) {
+        penta &l = pentalines[L];
+        int note;
+        int hbar = -1;
+        int vbar = -1;
+        int vpos = -100;
+        int hpos = -100;
+        for (note = 0; note < notes[L].size(); ++note) {
+            sound s;
+            blob &n = notes[L][note];
+            while (vpos < n.x0 - lineH / 2) {
+                if (++vbar < vbars[L].size()) {
+                    vpos = vbars[L][vbar].x1;
+                }
+            }
+            while (hpos < n.x0 - lineH / 2) {
+                if (++hbar < hbars[L].size()) {
+                    hpos = hbars[L][hbar].x1;
+                }
+            }
+            //note has horizontal staff
+            if (vbar < vbars[L].size() && vpos < n.x1 + lineH / 2) {
+                if (hbar < hbars[L].size() && hbars[L][hbar].x0 < n.x1 + lineH / 2) {
+                    if (hbar + 1 < hbars[L].size() && hbars[L][hbar + 1].x0 < n.x1 + lineH / 2) {
+                        s.len = 1;
+                    } else {
+                        s.len = 2;
+                    }
+                } else {
+                    s.len = 4;
+                }
+            } else {
+                s.len = 8;
+            }
+            float y = (n.y0 + n.y1) / 2;
+            float x = (n.x0 + n.x1) / 2;
+            float f1 = ((float) x - l.x0) / (l.x1 - l.x0);
+            float f0 = 1.0f - f1;
+            int y0 = (l.m0 - l.th0) * f0 + (l.m1 - l.th1) * f1;
+            int y1 = (l.m0 + l.th0) * f0 + (l.m1 + l.th1) * f1;
+
+            if (y0 >= y1) continue;
+
+            y = (y - y0) / l.th0;
+            y = y * 6 + 1.5;
+            if (y < 0) y = 0;
+            if (y > 14) y = 14;
+
+            s.hei = (int) y;
+            music.push_back(s);
+        }
+    }
+}
+
+void drawMusic() {
+    imageptr ptr = transposedImg;
+    *ptr++ = music.size();
+    for (int i = 0; i < music.size(); ++i) {
+        *ptr++ = music[i].hei;
+        *ptr++ = music[i].len;
+    }
+}
 
 void removeBlackLines() {
     for (int L = 0; L < pentalines.size(); ++L) {
@@ -196,17 +282,36 @@ void correctBlobs2() {
     }
 }
 
+void classifyBlobs() {
+    hbars.resize(blobs.size());
+    vbars.resize(blobs.size());
+    notes.resize(blobs.size());
+    others.resize(blobs.size());
+    for (int L = 0; L < blobs.size(); ++L) {
+        for (int b = 0; b < blobs[L].size(); ++b) {
+            blob &bl = blobs[L][b];
+            if (bl.x1 - bl.x0 > 2.5f * lineH) hbars[L].push_back(bl);
+            else if (bl.h > 3 * lineH) vbars[L].push_back(bl);
+            else if (bl.x1 - bl.x0 > lineH && bl.x1 - bl.x0 > lineH) notes[L].push_back(bl);
+            else others[L].push_back(bl);
+        }
+    }
+}
+
 void drawBlobs() {
     for (int L = 0; L < blobs.size(); ++L) {
-        penta l = pentalines[L];
         for (int b = 0; b < blobs[L].size(); ++b) {
             blob bl = blobs[L][b];
-            int y0 = bl.y0;
-            int y1 = bl.y1;
+            unsigned char color;
+            if (bl.x1 - bl.x0 > 2.5f * lineH) color = HORIZONTAL_COLOR;
+            else if (bl.y1 - bl.y0 > 3 * lineH) color = VERTICAL_COLOR;
+            else if (bl.x1 - bl.x0 > lineH && bl.x1 - bl.x0 > lineH) color = NOTE_COLOR;
+            else color = OTHER_COLOR;
             for (int x = bl.x0; x <= bl.x1; ++x) {
-                imageptr ptr = transposedImg + x * originalH + y0;
-                for (int y = y0; y <= y1; ++y) {
-                    *ptr++ ^= 255;
+                imageptr ptr = transposedImg + x * originalH + bl.y0;
+                for (int y = bl.y0; y <= bl.y1; ++y) {
+                    *ptr = color;
+                    ++ptr;
                 }
             }
         }
@@ -234,58 +339,69 @@ void init() {
     }
 }
 
-const float MIN_H = 0.8f;
+const float MIN_H = 0.5f;
 
-void findBlobs(){
+void findBlobs() {
     blobs.clear();
     blobs.resize(pentalines.size());
     for (int L = 0; L < pentalines.size(); ++L) {
         penta l = pentalines[L];
-        vector<blob>& lines = blobs[L];
+        vector<blob> lines;
         if (l.x0 >= l.x1) continue;
         for (int x = l.x0; x <= l.x1; ++x) {
             float f1 = ((float) x - l.x0) / (l.x1 - l.x0);
             float f0 = 1.0f - f1;
             int y0 = (l.m0 - 3 * l.th0 / 2) * f0 + (l.m1 - 3 * l.th1 / 2) * f1;
             int y1 = (l.m0 + 3 * l.th0 / 2) * f0 + (l.m1 + 3 * l.th1 / 2) * f1;
-            
+            if (y0 >= y1) continue;
             int currY = -1;
             int index = -1;
             int initSize = lines.size();
             int count = 0;
             imageptr ptr = transposedImg + x * originalH + y0;
-            
-            for (int y = y0; y <= y1; ++y) {
-                if (*ptr++ == 0) {
+            for (int y = y0; y <= y1 + 1; ++y) {
+                if (ptr < transposedImg || ptr >= transposedImg + originalW * originalH) break;
+                if (y > y1 || *ptr++ == 0) {
                     ++count;
                 } else {
-                    if(count > MIN_H * lineH){
+                    if (count > MIN_H * lineH) {
                         while (currY < y - count) {
-                            if (++index < initSize)
+                            if (++index < initSize) {
+                                if (index < 0 || index >= lines.size())return;
                                 currY = (lines[index].y0 + lines[index].y1) / 2;
-                            else {
+                            } else {
                                 break;
                             }
                         }
-                        if (index >= initSize || currY >= y) {
-                            lines.push_back(blob(x,x,y - count,y-1));
+                        if (index >= initSize || currY >= y ||
+                            abs(y - (1 + count) / 2 - currY) > lineH / 2) {
+                            lines.push_back(blob(x, x, y - count, y - 1));
                         } else {
+                            if (index < 0 || index >= lines.size())return;
                             lines[index].x1 = x;
-                            lines[index].y0 = y - count;
-                            lines[index].y1 = y - 1;
+                            lines[index].y0 = y0;
+                            lines[index].y1 = y1;
+                            UPDATE(lines[index].h, count, >);
                         }
                     }
                     count = 0;
                 }
             }
+            int toRemove = 0;
             for (int j = 0; j < lines.size(); ++j) {
-                if (lines[j].x1 < (i - MAX_HOLE) * GRID) {
-                    swap(lines[j], lines[lines.size() - 1]);
-                    lines.pop_back();
+                if (lines[j].x1 < x) {
+                    blobs[L].push_back(lines[j]);
+                    lines[j].y0 = INFINITY;
+                    toRemove++;
                 }
             }
             sort(lines.begin(), lines.end());
+            lines.erase(lines.end() - toRemove, lines.end());
         }
+        for (int j = 0; j < lines.size(); ++j) {
+            blobs[L].push_back(lines[j]);
+        }
+        lines.clear();
     }
 }
 
@@ -481,8 +597,14 @@ JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_co
     findBlobs();
     //removeBlackLines();
     //correctBlobs();
-    drawBlobs();
+    classifyBlobs();
     drawLines();
+    drawBlobs();
     postProcess();
+
+    createMusic();
+
+    drawMusic();
+
     return best;
 }

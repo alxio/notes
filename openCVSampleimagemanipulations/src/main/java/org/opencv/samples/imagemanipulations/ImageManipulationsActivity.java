@@ -25,6 +25,8 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.MotionEvent;
+import android.view.View;
 import android.view.WindowManager;
 
 public class ImageManipulationsActivity extends Activity implements CvCameraViewListener2 {
@@ -74,6 +76,17 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
 
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.image_manipulations_activity_surface_view);
         mOpenCvCameraView.setCvCameraViewListener(this);
+        mOpenCvCameraView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if (playing) {
+                    mPlayer.stop();
+                    playing = false;
+                } else {
+                    canPlay = true;
+                }
+            }
+        });
     }
 
     @Override
@@ -123,31 +136,62 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
     int[] count = new int[MAX];
 
     public synchronized Mat onCameraFrame(CvCameraViewFrame inputFrame) {
-        mGray = inputFrame.gray();
-        Imgproc.adaptiveThreshold(mGray, mIntermediateMat, 255, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY, 25, 5.0);
-        Imgproc.dilate(mIntermediateMat, mGray, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(1.5, 1.5)));
-        Core.transpose(mGray, mTransposed);
+        if (!playing) {
+            mGray = inputFrame.gray();
+            Imgproc.adaptiveThreshold(mGray, mIntermediateMat, 255, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY, 25, 5.0);
+            Imgproc.dilate(mIntermediateMat, mGray, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(1.5, 1.5)));
+            Core.transpose(mGray, mTransposed);
 
-        colorizeLine(mGray.dataAddr(), mGray.cols(), mGray.rows(), 0);
-        int rows = computeLineHeight(mTransposed.dataAddr(), mTransposed.cols(), mTransposed.rows());
-        Log.e(TAG, "NDK: " + rows);
-        readData();
+            colorizeLine(mGray.dataAddr(), mGray.cols(), mGray.rows(), 0);
+            int rows = computeLineHeight(mTransposed.dataAddr(), mTransposed.cols(), mTransposed.rows());
+            Log.e(TAG, "NDK: " + rows);
+            readData();
+        } else {
+            long now = System.currentTimeMillis();
+            float time = 0.001f * (now - mPlaybackStarted);
+            int i = -1;
+            while (time > 0) {
+                if (++i >= mSounds.size()) break;
+                time -= mSounds.get(i).length * Sound.basicLen;
+            }
+            colorizeLine(mTransposed.dataAddr(), mTransposed.cols(), mTransposed.rows(), i);
+            if (i == mSounds.size() - 1) playing = false;
+        }
         Core.transpose(mTransposed, mGray);
-
         return mGray;
     }
 
+    boolean playing = false;
+    boolean canPlay = false;
+
+    Player mPlayer = new Player();
+    ArrayList<Sound> mSounds = new ArrayList<>();
+    long mPlaybackStarted = 0;
+
     private void readData() {
-        ArrayList<Integer> arr = new ArrayList<>();
-        byte[] len = new byte[1];
+        ArrayList<Byte> arr = new ArrayList<>();
+        byte[] len = new byte[2];
         byte[] tmp = new byte[2];
         mTransposed.get(0, 0, len);
-        for (int i = 1; i / 2 < len[0]; i += 2) {
+        int l = len[0] * 128 + len[1];
+        Log.e(TAG, "NOTES COUNT: " + l);
+        for (int i = 2; i / 2 < l; i += 2) {
             mTransposed.get(0, i, tmp);
-            arr.add((int) tmp[0]);
-            arr.add((int) tmp[1]);
+            arr.add(tmp[0]);
+            arr.add(tmp[1]);
         }
-        Log.e(TAG, "NOTES: " + arr.toString() + " " + arr.toString());
+        if (canPlay && !playing) {
+            playing = true;
+            canPlay = false;
+            mSounds.clear();
+            for (int i = 0; i < arr.size(); i += 2) {
+                mSounds.add(new Sound(arr.get(i), arr.get(i + 1)));
+            }
+            short[] data = Sound.generateSound(mSounds);
+            mPlayer.play(data);
+            mPlaybackStarted = System.currentTimeMillis();
+        }
+        Log.e(TAG, "NOTES: " + arr.toString());
     }
 
     public native int computeLineHeight(long nativeObject, int w, int h);

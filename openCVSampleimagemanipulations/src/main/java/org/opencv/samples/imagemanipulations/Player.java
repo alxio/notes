@@ -7,6 +7,7 @@ import android.media.AudioTrack;
 public class Player {
     private final int SAMPLE_RATE = 16000;
     private AudioTrack mTrack;
+    private boolean mStarted = false;
 
     public void play(short[] sounds) {
         play(sounds, SAMPLE_RATE);
@@ -19,6 +20,7 @@ public class Player {
      * @param rate   sample rate in Hz
      */
     public void play(short[] sounds, int rate) {
+        mStarted = false;
         if (mTrack != null) {
             mTrack.stop();
             mTrack.release();
@@ -29,9 +31,16 @@ public class Player {
                     AudioFormat.ENCODING_PCM_16BIT, sounds.length * 2,
                     AudioTrack.MODE_STATIC);
             mTrack.write(sounds, 0, sounds.length);
+            mStarted = true;
             mTrack.play();
         } catch (RuntimeException e) {
             e.printStackTrace();
         }
+    }
+
+    public void stop() {
+        if (mTrack != null && mStarted)
+            mTrack.stop();
+        mStarted = false;
     }
 }

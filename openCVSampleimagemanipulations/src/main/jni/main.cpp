@@ -14,6 +14,12 @@ const int TOLERANCE = 2;
 const int GRID = 10;
 const int MAX_HOLE = 10;
 const int INFINITY = 1000000000;
+
+const int VERTICAL_COLOR = 80;
+const int NOTE_COLOR = 255;
+const int HORIZONTAL_COLOR = 200;
+const int OTHER_COLOR = 0;
+
 int originalH, originalW, lineH;
 
 imageptr transposedImg;
@@ -67,11 +73,6 @@ struct penta {
     }
 };
 
-const int NOTE_COLOR = 50;
-const int HORIZONTAL_COLOR = 150;
-const int VERTICAL_COLOR = 100;
-const int OTHER_COLOR = 20;
-
 struct blob {
     blob(int x0, int x1, int y0, int y1) {
         this->x0 = x0;
@@ -101,11 +102,72 @@ vector<vector<blob> > others;
 struct sound {
     int len;
     int hei;
+    int x, y;
 };
 
 vector<sound> music;
 
+int lastX = -1;
+int lastY = -1;
+
+JNIEXPORT jint
+
+JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_colorizeLine
+        (JNIEnv *, jobject, jlong matptr, jint w, jint h, jint currentSound) {
+    if (currentSound >= music.size()) return 1;
+    sound &s = music[currentSound];
+    penta &l = pentalines[s.y];
+    if (lastY < s.y) {
+        penta &l1 = pentalines[s.y - 1];
+        if (s.y > 0)
+            for (int x = lastX + 1; x < originalW; ++x) {
+                float f1 = ((float) x - l1.x0) / (l1.x1 - l1.x0);
+                float f0 = 1.0f - f1;
+                int y0 = (l1.m0 - l1.th0) * f0 + (l1.m1 - l1.th1) * f1;
+                int y1 = (l1.m0 + l1.th0) * f0 + (l1.m1 + l1.th1) * f1;
+                for (int y = y0; y <= y1; ++y) {
+                    IMG(x, y) ^= 255;
+                }
+            }
+        lastY = s.y;
+        lastX = l.x0;
+    }
+    for (int x = lastX + 1; x <= s.x; ++x) {
+        float f1 = ((float) x - l.x0) / (l.x1 - l.x0);
+        float f0 = 1.0f - f1;
+        int y0 = (l.m0 - l.th0) * f0 + (l.m1 - l.th1) * f1;
+        int y1 = (l.m0 + l.th0) * f0 + (l.m1 + l.th1) * f1;
+        for (int y = y0; y <= y1; ++y) {
+            IMG(x, y) ^= 255;
+        }
+    }
+    lastX = s.x;
+    lastY = s.y;
+    return 0;
+}
+
+void classifyBlobs() {
+    hbars.clear();
+    vbars.clear();
+    notes.clear();
+    others.clear();
+    hbars.resize(blobs.size());
+    vbars.resize(blobs.size());
+    notes.resize(blobs.size());
+    others.resize(blobs.size());
+    for (int L = 0; L < blobs.size(); ++L) {
+        for (int b = 0; b < blobs[L].size(); ++b) {
+            blob bl = blobs[L][b];
+            if (bl.x1 - bl.x0 > 2.5f * lineH) hbars[L].push_back(bl);
+            else if (bl.h > 2.5 * lineH && bl.x1 - bl.x0 < lineH / 2) vbars[L].push_back(bl);
+            else if (bl.x1 - bl.x0 > lineH && bl.h > lineH / 2) notes[L].push_back(bl);
+            else others[L].push_back(bl);
+        }
+    }
+}
+
 void createMusic() {
+    music.clear();
     for (int L = 0; L < pentalines.size(); ++L) {
         penta &l = pentalines[L];
         int note;
@@ -119,11 +181,15 @@ void createMusic() {
             while (vpos < n.x0 - lineH / 2) {
                 if (++vbar < vbars[L].size()) {
                     vpos = vbars[L][vbar].x1;
+                } else {
+                    break;
                 }
             }
             while (hpos < n.x0 - lineH / 2) {
                 if (++hbar < hbars[L].size()) {
                     hpos = hbars[L][hbar].x1;
+                } else {
+                    break;
                 }
             }
             //note has horizontal staff
@@ -149,12 +215,14 @@ void createMusic() {
 
             if (y0 >= y1) continue;
 
-            y = (y - y0) / l.th0;
+            y = (y1 - y) / l.th0;
             y = y * 6 + 1.5;
             if (y < 0) y = 0;
             if (y > 14) y = 14;
 
             s.hei = (int) y;
+            s.x = n.x1;
+            s.y = L;
             music.push_back(s);
         }
     }
@@ -162,7 +230,8 @@ void createMusic() {
 
 void drawMusic() {
     imageptr ptr = transposedImg;
-    *ptr++ = music.size();
+    *ptr++ = music.size() / 128;
+    *ptr++ = music.size() % 128;
     for (int i = 0; i < music.size(); ++i) {
         *ptr++ = music[i].hei;
         *ptr++ = music[i].len;
@@ -282,30 +351,14 @@ void correctBlobs2() {
     }
 }
 
-void classifyBlobs() {
-    hbars.resize(blobs.size());
-    vbars.resize(blobs.size());
-    notes.resize(blobs.size());
-    others.resize(blobs.size());
-    for (int L = 0; L < blobs.size(); ++L) {
-        for (int b = 0; b < blobs[L].size(); ++b) {
-            blob &bl = blobs[L][b];
-            if (bl.x1 - bl.x0 > 2.5f * lineH) hbars[L].push_back(bl);
-            else if (bl.h > 3 * lineH) vbars[L].push_back(bl);
-            else if (bl.x1 - bl.x0 > lineH && bl.x1 - bl.x0 > lineH) notes[L].push_back(bl);
-            else others[L].push_back(bl);
-        }
-    }
-}
-
 void drawBlobs() {
     for (int L = 0; L < blobs.size(); ++L) {
         for (int b = 0; b < blobs[L].size(); ++b) {
             blob bl = blobs[L][b];
             unsigned char color;
             if (bl.x1 - bl.x0 > 2.5f * lineH) color = HORIZONTAL_COLOR;
-            else if (bl.y1 - bl.y0 > 3 * lineH) color = VERTICAL_COLOR;
-            else if (bl.x1 - bl.x0 > lineH && bl.x1 - bl.x0 > lineH) color = NOTE_COLOR;
+            else if (bl.h > 2.5 * lineH && bl.x1 - bl.x0 < lineH / 2) color = VERTICAL_COLOR;
+            else if (bl.x1 - bl.x0 > lineH && bl.h > lineH / 2) color = NOTE_COLOR;
             else color = OTHER_COLOR;
             for (int x = bl.x0; x <= bl.x1; ++x) {
                 imageptr ptr = transposedImg + x * originalH + bl.y0;
@@ -379,8 +432,8 @@ void findBlobs() {
                         } else {
                             if (index < 0 || index >= lines.size())return;
                             lines[index].x1 = x;
-                            lines[index].y0 = y0;
-                            lines[index].y1 = y1;
+                            lines[index].y0 = y - count;
+                            lines[index].y1 = y - 1;
                             UPDATE(lines[index].h, count, >);
                         }
                     }
@@ -548,14 +601,6 @@ void postProcess() {
     }
 }
 
-JNIEXPORT jint
-
-JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_colorizeLine
-        (JNIEnv *, jobject, jlong matptr, jint w, jint h, jint lineh) {
-    originalImg = (imageptr) matptr;
-    return 0;
-}
-
 const int MAX = 32;
 const int MIN = 2;
 const int SKIP = 100;
@@ -591,20 +636,20 @@ JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_co
     transposedImg = (imageptr) matptr;
     originalH = w;
     originalW = h;
+
     init();
     findLines();
     correctLines();
     findBlobs();
-    //removeBlackLines();
-    //correctBlobs();
-    classifyBlobs();
     drawLines();
+    classifyBlobs();
     drawBlobs();
     postProcess();
 
     createMusic();
-
     drawMusic();
 
-    return best;
+    int allnotes = 0;
+    for (int i = 0; i < notes.size(); ++i) allnotes += notes[i].size();
+    return allnotes;
 }

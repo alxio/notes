@@ -276,11 +276,51 @@ void findSums() {
                     ++count;
                 }
             }
-            sums[L][x - l.x0] = ((float) count) / (y1 - y0);
+            sums[L][x - l.x0] = ((float) count) / (y1 - y0 + 1);
             all += sums[L][x - l.x0];
         }
         meanSums[L] = all / (l.x1 - l.x0 + 1);
     }
+}
+
+struct blob {
+    int x0, x1;
+    float mean;
+    float max;
+    unsigned char color;
+
+    blob(int x0, int x1, float mean, int max, unsigned char color) :
+            x0(x0), x1(x1), mean(mean), max(max), color(color) {
+    }
+};
+
+vector<vector<blob> > blobs;
+
+void addBlob(int x0, int x1, float count, float max, int L) {
+    int len = (x1 - x0 + 1);
+    float mean = count / len;
+
+    unsigned char color = 0;
+
+    if (len < lineH && max < 0.03f) {
+        return; //color = 50; //noise
+    } else if (mean > 2.5 * meanSums[L]) {
+        return; //color = 100; //violin key, tempo, bars
+    } else if (max > 3 * meanSums[L] && len < 2.5 * lineH) {
+        color = 255; //single notes
+    } else if (max > 3 * meanSums[L]) {
+        //multi notes
+        color = 255;
+        int mid = (x0 + x1) / 2;
+        blobs[L].push_back(blob(x0, mid - 1, mean, max, color));
+        blobs[L].push_back(blob(mid + 1, x1, mean, max, color));
+        return;
+    } else if (max < 0.075) {
+        color = 150; //dots?
+    } else {
+        return;//
+    }
+    blobs[L].push_back(blob(x0, x1, mean, max, color));
 }
 
 void findBlobs() {
@@ -288,62 +328,22 @@ void findBlobs() {
     blobs.resize(pentalines.size());
     for (int L = 0; L < pentalines.size(); ++L) {
         penta l = pentalines[L];
-        vector<blob> lines;
-        if (l.x0 >= l.x1) continue;
-        for (int x = l.x0; x <= l.x1; ++x) {
-            float f1 = ((float) x - l.x0) / (l.x1 - l.x0);
-            float f0 = 1.0f - f1;
-            int y0 = (l.m0 - 3 * l.th0 / 2) * f0 + (l.m1 - 3 * l.th1 / 2) * f1;
-            int y1 = (l.m0 + 3 * l.th0 / 2) * f0 + (l.m1 + 3 * l.th1 / 2) * f1;
-            if (y0 >= y1) continue;
-            int currY = -1;
-            int index = -1;
-            int initSize = lines.size();
-            int count = 0;
-            imageptr ptr = transposedImg + x * originalH + y0;
-            for (int y = y0; y <= y1 + 1; ++y) {
-                if (ptr < transposedImg || ptr >= transposedImg + originalW * originalH) break;
-                if (y > y1 || *ptr++ == 0) {
-                    ++count;
-                } else {
-                    if (count > MIN_H * lineH) {
-                        while (currY < y - count) {
-                            if (++index < initSize) {
-                                if (index < 0 || index >= lines.size())return;
-                                currY = (lines[index].y0 + lines[index].y1) / 2;
-                            } else {
-                                break;
-                            }
-                        }
-                        if (index >= initSize || currY >= y ||
-                            abs(y - (1 + count) / 2 - currY) > lineH / 2) {
-                            lines.push_back(blob(x, x, y - count, y - 1));
-                        } else {
-                            if (index < 0 || index >= lines.size())return;
-                            lines[index].x1 = x;
-                            lines[index].y0 = y - count;
-                            lines[index].y1 = y - 1;
-                            UPDATE(lines[index].h, count, >);
-                        }
-                    }
-                    count = 0;
+        int last0 = -1;
+        float count = 0;
+        float max = 0;
+        for (int i = 0; i < sums[L].size(); ++i) {
+            if (sums[L][i] == 0) {
+                if (i > last0 + 2) {
+                    addBlob(last0 + 1, i, count, max, L);
                 }
+                last0 = i;
+                count = 0;
+                max = 0;
+            } else {
+                count += sums[L][i];
+                UPDATE(max, sums[L][i], >);
             }
-            int toRemove = 0;
-            for (int j = 0; j < lines.size(); ++j) {
-                if (lines[j].x1 < x) {
-                    blobs[L].push_back(lines[j]);
-                    lines[j].y0 = INFINITY;
-                    toRemove++;
-                }
-            }
-            sort(lines.begin(), lines.end());
-            lines.erase(lines.end() - toRemove, lines.end());
         }
-        for (int j = 0; j < lines.size(); ++j) {
-            blobs[L].push_back(lines[j]);
-        }
-        lines.clear();
     }
 }
 
@@ -484,24 +484,26 @@ void drawLines() {
         }
     }
     return;
-    for (int L = 0; L < lines.size(); ++L) {
-        line l = lines[L];
-        if (l.x0 >= l.x1) continue;
-        for (int x = l.x0; x <= l.x1; ++x) {
-            int y0 = l.y0 + (l.y1 - l.y0) * (x - l.x0) / (l.x1 - l.x0);
-            int y1 = l.h0 + (l.h1 - l.h0) * (x - l.x0) / (l.x1 - l.x0);
-            imageptr ptr = transposedImg + x * originalH + y0;
-            for (int y = y0; y <= y1; ++y) {
-                *(ptr++) &= 192;
-            }
-        }
-    }
 }
 
-void postProcess() {
-    for (imageptr ptr = transposedImg; ptr < transposedImg + originalH * originalW; ++ptr) {
-        if (*ptr == 0) *ptr = 200;
+void drawBlobs() {
+    for (int L = 0; L < pentalines.size(); ++L) {
+        penta l = pentalines[L];
+        if (l.x0 >= l.x1) continue;
+        for (int i = 0; i < blobs[L].size(); ++i)
+            for (int x = blobs[L][i].x0 + l.x0; x <= blobs[L][i].x1 + l.x0; ++x) {
+                float f1 = ((float) x - l.x0) / (l.x1 - l.x0);
+                float f0 = 1.0f - f1;
+                int y0 = (l.m0 - 3 * l.th0 / 3) * f0 + (l.m1 - 3 * l.th1 / 3) * f1;
+                int y1 = (l.m0 + 3 * l.th0 / 3) * f0 + (l.m1 + 3 * l.th1 / 3) * f1;
+                imageptr ptr = transposedImg + x * originalH + y0;
+
+                for (int y = y0; y <= y1; ++y) {
+                    *(ptr++) ^= blobs[L][i].color;
+                }
+            }
     }
+    return;
 }
 
 const int MAX = 32;
@@ -543,20 +545,20 @@ JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_co
     init();
     findLines();
     correctLines();
-
     removeBlackLines();
-
-    //findBlobs();
     findSums();
+
+    findBlobs();
     drawLines();
     //classifyBlobs();
-    //drawBlobs();
+    drawBlobs();
     //postProcess();
 
     //createMusic();
     //drawMusic();
 
-    int allnotes = 0;
-    for (int i = 0; i < notes.size(); ++i) allnotes += notes[i].size();
-    return allnotes;
+    //int allnotes = 0;
+    //for (int i = 0; i < notes.size(); ++i) allnotes += notes[i].size();
+    //return allnotes;
+    return 1;
 }

@@ -139,8 +139,9 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
         if (!playing) {
             mGray = inputFrame.gray();
             Imgproc.adaptiveThreshold(mGray, mIntermediateMat, 255, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY, 25, 5.0);
-            Imgproc.dilate(mIntermediateMat, mGray, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(1.5, 1.5)));
-            Core.transpose(mGray, mTransposed);
+            Imgproc.dilate(mIntermediateMat, mGray, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2, 2)));
+            Imgproc.erode(mGray, mIntermediateMat, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2, 2)));
+            Core.transpose(mIntermediateMat, mTransposed);
 
             colorizeLine(mGray.dataAddr(), mGray.cols(), mGray.rows(), 0);
             int rows = computeLineHeight(mTransposed.dataAddr(), mTransposed.cols(), mTransposed.rows());

@@ -135,16 +135,25 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
     final int MIN = 2;
     int[] count = new int[MAX];
 
-    public synchronized Mat onCameraFrame(CvCameraViewFrame inputFrame) {
+    private boolean isProcessing = false;
+
+    public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
+        boolean cantProcess = false;
+        synchronized (this) {
+            if (isProcessing) {
+                cantProcess = true;
+            } else {
+                isProcessing = true;
+            }
+        }
+        if (cantProcess) return null;
         if (!playing) {
             mGray = inputFrame.gray();
             Imgproc.adaptiveThreshold(mGray, mIntermediateMat, 255, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY, 25, 5.0);
             Imgproc.dilate(mIntermediateMat, mGray, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2, 2)));
             Imgproc.erode(mGray, mIntermediateMat, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2, 2)));
             Core.transpose(mIntermediateMat, mTransposed);
-
-            colorizeLine(mGray.dataAddr(), mGray.cols(), mGray.rows(), 0);
-            int rows = computeLineHeight(mTransposed.dataAddr(), mTransposed.cols(), mTransposed.rows());
+            int rows = computeLineHeight(mTransposed.dataAddr(), mIntermediateMat.dataAddr(), mTransposed.cols(), mTransposed.rows());
             Log.e(TAG, "NDK: " + rows);
             readData();
         } else {
@@ -155,10 +164,11 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
                 if (++i >= mSounds.size()) break;
                 time -= mSounds.get(i).length * Sound.basicLen;
             }
-            colorizeLine(mTransposed.dataAddr(), mTransposed.cols(), mTransposed.rows(), i);
+            colorizeLine(i);
             if (i == mSounds.size() - 1) playing = false;
         }
         Core.transpose(mTransposed, mGray);
+        isProcessing = false;
         return mGray;
     }
 
@@ -195,7 +205,7 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
         Log.e(TAG, "NOTES: " + arr.toString());
     }
 
-    public native int computeLineHeight(long nativeObject, int w, int h);
+    public native int computeLineHeight(long nativeObject, long nativeObject2, int w, int h);
 
-    public native int colorizeLine(long nativeObject, int w, int h, int lineHeight);
+    public native int colorizeLine(int currentSound);
 }

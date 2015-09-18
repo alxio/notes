@@ -13,7 +13,7 @@ extern "C" {
  * Signature: (JII)I
  */
 JNIEXPORT jint JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_computeLineHeight
-  (JNIEnv *, jobject, jlong, jint, jint);
+        (JNIEnv *, jobject, jlong, jlong, jint, jint);
 
 /*
  * Class:     org_opencv_samples_imagemanipulations_ImageManipulationsActivity
@@ -21,7 +21,7 @@ JNIEXPORT jint JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulat
  * Signature: (JIII)I
  */
 JNIEXPORT jint JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_colorizeLine
-  (JNIEnv *, jobject, jlong, jint, jint, jint);
+        (JNIEnv *, jobject, jint);
 
 #ifdef __cplusplus
 }

@@ -35,7 +35,7 @@
         android:label="@string/app_name"
         android:theme="@android:style/Theme.NoTitleBar.Fullscreen" >
         <activity
-            android:name="org.opencv.samples.imagemanipulations.ImageManipulationsActivity"
+            android:name="org.opencv.samples.musicrecognition.ImageManipulationsActivity"
             android:configChanges="keyboardHidden|orientation"
             android:label="@string/app_name"
             android:screenOrientation="landscape" >

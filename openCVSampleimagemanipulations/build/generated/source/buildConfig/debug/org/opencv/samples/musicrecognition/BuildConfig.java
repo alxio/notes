@@ -1,7 +1,7 @@
 /**
  * Automatically generated file. DO NOT MODIFY
  */
-package org.opencv.samples.imagemanipulations;
+package org.opencv.samples.musicrecognition;
 
 public final class BuildConfig {
   public static final boolean DEBUG = Boolean.parseBoolean("true");

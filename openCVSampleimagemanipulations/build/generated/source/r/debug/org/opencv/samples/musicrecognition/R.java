@@ -5,7 +5,7 @@
  * should not be modified by hand.
  */
 
-package org.opencv.samples.imagemanipulations;
+package org.opencv.samples.musicrecognition;
 
 public final class R {
     public static final class attr {
@@ -42,8 +42,10 @@ containing a value of this type.
     public static final class id {
         public static final int any=0x7f050000;
         public static final int back=0x7f050001;
+        public static final int freeze=0x7f050005;
         public static final int front=0x7f050002;
         public static final int image_manipulations_activity_surface_view=0x7f050003;
+        public static final int play=0x7f050004;
     }
     public static final class layout {
         public static final int image_manipulations_surface_view=0x7f030000;

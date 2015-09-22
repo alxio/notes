@@ -1,7 +1,6 @@
-package org.opencv.samples.imagemanipulations;
+package org.opencv.samples.musicrecognition;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Random;
 
 import org.opencv.android.BaseLoaderCallback;
@@ -9,11 +8,7 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
-import org.opencv.core.CvType;
 import org.opencv.core.Mat;
-import org.opencv.core.MatOfFloat;
-import org.opencv.core.MatOfInt;
-import org.opencv.core.Point;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.android.CameraBridgeViewBase;
@@ -23,11 +18,9 @@ import org.opencv.imgproc.Imgproc;
 import android.app.Activity;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.Button;
 
 public class ImageManipulationsActivity extends Activity implements CvCameraViewListener2 {
     private static final String TAG = "OCVSample::Activity";
@@ -36,6 +29,11 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
     private Mat mIntermediateMat;
     private Mat mTransposed;
     private Mat mGray;
+    private Mat mOriginal;
+    private Mat mImage;
+    private Mat mColor;
+    private Mat mMask;
+
     private Random mRandom = new Random();
 
     static {
@@ -71,22 +69,24 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
         Log.i(TAG, "called onCreate");
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
         setContentView(R.layout.image_manipulations_surface_view);
-
-        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.image_manipulations_activity_surface_view);
-        mOpenCvCameraView.setCvCameraViewListener(this);
-        mOpenCvCameraView.setOnClickListener(new View.OnClickListener() {
+        mFreezeButton = (Button) findViewById(R.id.freeze);
+        mFreezeButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                if (playing) {
-                    mPlayer.stop();
-                    playing = false;
-                } else {
-                    canPlay = true;
-                }
+                setFrozen(!mFrozen);
             }
         });
+        mPlayButton = (Button) findViewById(R.id.play);
+        mPlayButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                setPlaying(!mPlaying);
+            }
+        });
+        mPlayButton.setEnabled(false);
+        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.image_manipulations_activity_surface_view);
+        mOpenCvCameraView.setCvCameraViewListener(this);
     }
 
     @Override
@@ -117,6 +117,9 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
     public void onCameraViewStarted(int width, int height) {
         mIntermediateMat = new Mat();
         mTransposed = new Mat();
+        mImage = new Mat();
+        mColor = new Mat();
+        mMask = new Mat();
     }
 
     public void onCameraViewStopped() {
@@ -147,33 +150,37 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
             }
         }
         if (cantProcess) return null;
-        if (!playing) {
-            mGray = inputFrame.gray();
+        if (!mFrozen) {
+            mOriginal = inputFrame.gray().clone();
+            mGray = mOriginal.clone();
             Imgproc.adaptiveThreshold(mGray, mIntermediateMat, 255, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY, 25, 5.0);
             Imgproc.dilate(mIntermediateMat, mGray, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2, 2)));
             Imgproc.erode(mGray, mIntermediateMat, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2, 2)));
             Core.transpose(mIntermediateMat, mTransposed);
-            int rows = computeLineHeight(mTransposed.dataAddr(), mIntermediateMat.dataAddr(), mTransposed.cols(), mTransposed.rows());
-            Log.e(TAG, "NDK: " + rows);
+            int status = computeLineHeight(mTransposed.dataAddr(), mIntermediateMat.dataAddr(), mTransposed.cols(), mTransposed.rows());
+            Log.e(TAG, "NDK: " + status);
             readData();
         } else {
             long now = System.currentTimeMillis();
-            float time = 0.001f * (now - mPlaybackStarted);
             int i = -1;
-            while (time > 0) {
-                if (++i >= mSounds.size()) break;
-                time -= mSounds.get(i).length * Sound.basicLen;
+            if (mPlaying) synchronized (mSounds) {
+                float time = 0.001f * (now - mPlaybackStarted);
+                while (time > 0) {
+                    if (++i >= mSounds.size()) break;
+                    time -= mSounds.get(i).length * Sound.basicLen;
+                }
+                if (i == mSounds.size() - 1) setPlaying(false);
             }
             colorizeLine(i);
-            if (i == mSounds.size() - 1) playing = false;
         }
         Core.transpose(mTransposed, mGray);
+        Core.inRange(mGray, Scalar.all(31), Scalar.all(33), mMask);
+        Core.addWeighted(mOriginal, 0.75, mGray, 0.25, 1.0, mImage);
+        Imgproc.cvtColor(mImage, mColor, Imgproc.COLOR_GRAY2RGBA);
+        mColor.setTo(new Scalar(255, 0, 0, 255), mMask);
         isProcessing = false;
-        return mGray;
+        return mColor;
     }
-
-    boolean playing = false;
-    boolean canPlay = false;
 
     Player mPlayer = new Player();
     ArrayList<Sound> mSounds = new ArrayList<>();
@@ -191,21 +198,65 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
             arr.add(tmp[0]);
             arr.add(tmp[1]);
         }
-        if (canPlay && !playing) {
-            playing = true;
-            canPlay = false;
+        //Log.e(TAG, "NOTES: " + arr.toString());
+        synchronized (mSounds) {
             mSounds.clear();
             for (int i = 0; i < arr.size(); i += 2) {
                 mSounds.add(new Sound(arr.get(i), arr.get(i + 1)));
             }
-            short[] data = Sound.generateSound(mSounds);
-            mPlayer.play(data);
-            mPlaybackStarted = System.currentTimeMillis();
         }
-        Log.e(TAG, "NOTES: " + arr.toString());
     }
 
     public native int computeLineHeight(long nativeObject, long nativeObject2, int w, int h);
 
     public native int colorizeLine(int currentSound);
+
+
+    private Button mFreezeButton;
+    private Button mPlayButton;
+    private boolean mFrozen = false;
+    private boolean mPlaying = false;
+
+
+    private void setText(final CharSequence text, final Button button) {
+        button.post(new Runnable() {
+            public void run() {
+                button.setText(text);
+            }
+        });
+    }
+
+    private void setPlaying(boolean value) {
+        if (value == false) {
+            mPlayer.stop();
+            mPlaying = false;
+            setText("Play", mPlayButton);
+        } else {
+            if (mFrozen == true) {
+                synchronized (mSounds) {
+                    short[] data = Sound.generateSound(mSounds);
+                    if (mPlayer.play(data)) {
+                        mPlaybackStarted = System.currentTimeMillis();
+                        mPlaying = true;
+                        setText("Stop", mPlayButton);
+                    }
+                }
+            }
+        }
+    }
+
+    private void setFrozen(final boolean value) {
+        if (value == false) {
+            setPlaying(false);
+            setText("Freeze", mFreezeButton);
+        } else {
+            setText("Unfreeze", mFreezeButton);
+        }
+        mPlayButton.post(new Runnable() {
+            public void run() {
+                mPlayButton.setEnabled(value);
+            }
+        });
+        mFrozen = value;
+    }
 }

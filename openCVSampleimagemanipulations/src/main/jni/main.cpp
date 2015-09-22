@@ -1,4 +1,4 @@
-#include "org_opencv_samples_imagemanipulations_ImageManipulationsActivity.h"
+#include "org_opencv_samples_musicrecognition_ImageManipulationsActivity.h"
 
 #include <vector>
 #include <set>
@@ -105,7 +105,7 @@ int lastY = -1;
 
 JNIEXPORT jint
 
-JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_colorizeLine
+JNICALL Java_org_opencv_samples_musicrecognition_ImageManipulationsActivity_colorizeLine
         (JNIEnv *, jobject, jint currentSound) {
     if (currentSound >= music.size()) return 1;
     sound &s = music[currentSound];
@@ -119,7 +119,7 @@ JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_co
                 int y0 = (l1.m0 - l1.th0) * f0 + (l1.m1 - l1.th1) * f1;
                 int y1 = (l1.m0 + l1.th0) * f0 + (l1.m1 + l1.th1) * f1;
                 for (int y = y0; y <= y1; ++y) {
-                    IMG(x, y) ^= 255;
+                    if ((x & y & 1) == 0) IMG(x, y) ^= 255;
                 }
             }
         lastY = s.y;
@@ -131,7 +131,7 @@ JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_co
         int y0 = (l.m0 - l.th0) * f0 + (l.m1 - l.th1) * f1;
         int y1 = (l.m0 + l.th0) * f0 + (l.m1 + l.th1) * f1;
         for (int y = y0; y <= y1; ++y) {
-            IMG(x, y) ^= 255;
+            if ((x & y & 1) == 0) IMG(x, y) ^= 255;
         }
     }
     lastX = s.x;
@@ -359,10 +359,10 @@ int handleNote(blob note, int L, vector<pair<int, int> > &tops) {
     int lastNotBig = y0 - 1;
     int totalCount = 0;
 
-    for (int x = note.x0 + l.x0; x <= note.x1 + l.x0; ++x)
-        for (int y = y0; y <= y1; ++y)
-            if (((x ^ y) & 5) == 0)
-                IMG(x, y) = 128;
+//    for (int x = note.x0 + l.x0; x <= note.x1 + l.x0; ++x)
+//        for (int y = y0; y <= y1; ++y)
+//            if (((x ^ y) & 5) == 0)
+//                IMG(x, y) = 128;
 
     for (int y = y0; y <= y1; ++y) {
         int count = 0;
@@ -396,11 +396,11 @@ int handleNote(blob note, int L, vector<pair<int, int> > &tops) {
 //                }
 //                return 0;
 //            }
-            for (int x = note.x0 + l.x0; x <= note.x1 + l.x0; ++x) {
-                for (int y = candidates[c].y0; y <= candidates[c].y1; ++y) {
-                    IMG(x, y) ^= 255;
-                }
-            }
+//            for (int x = note.x0 + l.x0; x <= note.x1 + l.x0; ++x) {
+//                for (int y = candidates[c].y0; y <= candidates[c].y1; ++y) {
+//                    IMG(x, y) ^= 255;
+//                }
+//            }
             if (chosen > -1) {
                 divide = 2;
             }
@@ -410,12 +410,12 @@ int handleNote(blob note, int L, vector<pair<int, int> > &tops) {
 
     if (chosen == -1) return 0;
 
-//    for (int y = candidates[chosen].y0; y <= candidates[chosen].y1; ++y)
-//        for (int x = note.x0 + l.x0; x <= note.x1 + l.x0; ++x) {
-//            if (RANGECHECK) {
-//                if (IMG(x, y) == 0 && ((x ^ y) & 1)) IMG(x, y) = 128;
-//            }
-//        }
+    for (int y = candidates[chosen].y0; y <= candidates[chosen].y1; ++y)
+        for (int x = note.x0 + l.x0; x <= note.x1 + l.x0; ++x) {
+            if (RANGECHECK) {
+                if (IMG(x, y) == 0 && (x & y & 1)) IMG(x, y) = 31;
+            }
+        }
 
 
     sound s;
@@ -633,7 +633,7 @@ void drawLines() {
             imageptr ptr = transposedImg + x * originalH + y0;
 
             for (int y = y0; y <= y1; ++y) {
-                *(ptr++) &= 224;
+                *(ptr++) &= 223;
             }
 
             //Draw sums under line
@@ -677,7 +677,7 @@ int counters[MAX];
 
 JNIEXPORT jint
 
-JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_computeLineHeight
+JNICALL Java_org_opencv_samples_musicrecognition_ImageManipulationsActivity_computeLineHeight
         (JNIEnv *, jobject, jlong matptr, jlong original, jint w, jint h) {
     int white = 0;
     int best = 0;
@@ -710,6 +710,7 @@ JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_co
     init();
     findLines();
     correctLines();
+    
     removeBlackLines();
     findSums();
 

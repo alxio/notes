@@ -1,4 +1,4 @@
-package org.opencv.samples.imagemanipulations;
+package org.opencv.samples.musicrecognition;
 
 import java.util.Collection;
 import java.util.Random;

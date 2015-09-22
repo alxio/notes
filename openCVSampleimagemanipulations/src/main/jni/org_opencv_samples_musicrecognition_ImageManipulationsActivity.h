@@ -2,8 +2,8 @@
 #include <jni.h>
 /* Header for class org_opencv_samples_imagemanipulations_ImageManipulationsActivity */
 
-#ifndef _Included_org_opencv_samples_imagemanipulations_ImageManipulationsActivity
-#define _Included_org_opencv_samples_imagemanipulations_ImageManipulationsActivity
+#ifndef _Included_org_opencv_samples_musicrecognition_ImageManipulationsActivity
+#define _Included_org_opencv_samples_musicrecognition_ImageManipulationsActivity
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -12,7 +12,7 @@ extern "C" {
  * Method:    computeLineHeight
  * Signature: (JII)I
  */
-JNIEXPORT jint JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_computeLineHeight
+JNIEXPORT jint JNICALL Java_org_opencv_samples_musicrecognition_ImageManipulationsActivity_computeLineHeight
         (JNIEnv *, jobject, jlong, jlong, jint, jint);
 
 /*
@@ -20,7 +20,7 @@ JNIEXPORT jint JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulat
  * Method:    colorizeLine
  * Signature: (JIII)I
  */
-JNIEXPORT jint JNICALL Java_org_opencv_samples_imagemanipulations_ImageManipulationsActivity_colorizeLine
+JNIEXPORT jint JNICALL Java_org_opencv_samples_musicrecognition_ImageManipulationsActivity_colorizeLine
         (JNIEnv *, jobject, jint);
 
 #ifdef __cplusplus
